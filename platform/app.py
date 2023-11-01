@@ -1,26 +1,45 @@
 import os
+import time
+
+from settings import BASE_DIR
 from utils.crud_indexs import create_indexes,delete_indexes
 from azure.storage.blob import BlobServiceClient
-from azure.search.documents import SearchClient
-from azure.core.credentials import AzureKeyCredential
-from azure.search.documents.models import (
-    RawVectorQuery,
-    VectorizableTextQuery,
-)
+from utils.azure_chat_completion import AzureOpenAI
 from fastapi import FastAPI, UploadFile
+from fastapi.responses import RedirectResponse
 from typing import List
+from gradio_routes.pdf_interface import pdf_interface,progress1
+import starlette.status as status
+import gradio as gr
+import pickle
 app = FastAPI()
 from dotenv import load_dotenv
 load_dotenv()
 tenant = 'pythonsample'
 index_name = ''
+
+app = gr.mount_gradio_app(app, pdf_interface, path="/home/main")
+
+@app.get("/")
+async def home():
+    return RedirectResponse(url="/home/main", status_code=status.HTTP_302_FOUND)
+
+
 @app.post("/upload_pdf")
 async def upload_pdf(files: List[UploadFile]):
+    print(files)
+    print(type(files))
     tenant = 'pythonsample'
-
     customer_storage_connection_string = os.getenv("DOCUMENT_AZURE_STORAGE_CONNECTION_STRING")
     container_name = os.getenv("DOCUMENT_AZURE_STORAGE_CONTAINER_NAME")
-
+    print(f"THIS IS PROGRESS:{progress1}")
+    print(f"This is type of progress: {type(progress1)}")
+    print(f"This is dict of progress: {dir(progress1)}")
+    time.sleep(5)
+    progress1(0, desc="Starting...")
+    time.sleep(5)
+    progress1(0.3, desc="ffgafadf...")
+    progress1(.7, desc="You I loaded it...")
     prefix = f"{tenant}-{container_name}"
     print(prefix)
 
@@ -45,26 +64,14 @@ async def upload_pdf(files: List[UploadFile]):
     global index_name
     index_name = index_resources["chunk_index_resources"]["index_name"]
     print(f"This is index name: {index_name}")
-    return "File uploaded successfully"
+    return "Your files has been up"
 
 @app.get("/search")
 async def search(query: str):
-    chunk_index_name = index_name
-    search_client = SearchClient(os.getenv("AZURE_SEARCH_SERVICE_ENDPOINT"), chunk_index_name,
-                                 AzureKeyCredential(os.getenv("AZURE_SEARCH_ADMIN_KEY")))
-    vector_query = VectorizableTextQuery(text=query, k=3, fields="embedding")
-
-    results = search_client.search(
-        search_text=query,
-        vector_queries=[vector_query],
-        select=["title", "text"],
-        top=3
-    )
-
-    for result in results:
-        print(f"Title: {result['title']}")
-        print(f"Score: {result['@search.score']}")
-        print(f"Content: {result['text']}")
+    chunk_index_name = "pythonsample-pdf-data-chunk-index"
+    llm = AzureOpenAI(chunk_index_name)
+    response = llm.chat_query(query)
+    print(response)
     return "ok"
 
 
